@@ -1,0 +1,24 @@
+[
+  {
+    "event_type": "task_started",
+    "payload": {
+      "goal": "inspect repository and produce verified change"
+    }
+  },
+  {
+    "event_type": "tool_execution",
+    "payload": {
+      "tool": "filesystem.search_files",
+      "ok": true,
+      "elapsed_ms": 3.4
+    }
+  },
+  {
+    "event_type": "subagent_handoff",
+    "payload": {
+      "agent": "review",
+      "findings": ["Prioritize behavioral risks and verification gaps."]
+    }
+  }
+]
+

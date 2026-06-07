@@ -1,0 +1,15 @@
+{
+  "runs": [
+    {
+      "name": "repository_orientation",
+      "task_goal": "Inspect a Python service and produce a verified implementation plan.",
+      "task_success": true,
+      "tool_accuracy": 0.95,
+      "plan_completion": 1.0,
+      "execution_time_ms": 420.5,
+      "cost_estimate_usd": 0.0042,
+      "notes": "Representative sample run for documentation."
+    }
+  ]
+}
+
