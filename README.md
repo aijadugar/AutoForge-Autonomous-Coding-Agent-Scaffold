@@ -15,7 +15,9 @@ uvicorn autoforge.api.app:app --reload
 Submit a task:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/task   -H "Content-Type: application/json"   -d '{"goal":"inspect this repository and propose a verified change"}'
+curl -X POST http://127.0.0.1:8000/task \
+  -H "Content-Type: application/json" \
+  -d '{"goal":"find all FastAPI routes in this repository"}'
 ```
 
 ## Architecture

@@ -7,8 +7,8 @@ from autoforge.planner import Planner
 from autoforge.subagents import SubAgentTool
 from autoforge.subagents.tool import InvokeSubAgentInput
 from autoforge.tools import ToolRegistry, get_registry
-
 from autoforge.executor import Executor
+from autoforge.llm.agent import AgentBrain
 
 
 class AgentRuntime:
@@ -27,6 +27,7 @@ class AgentRuntime:
         self.planner = planner or Planner()
         self.executor = Executor(self.registry, self.memory, self.store)
         self.subagents = SubAgentTool(self.registry, self.memory)
+        self.agent = AgentBrain()
 
     def submit(self, goal: str) -> AgentResult:
         started = time.perf_counter()
@@ -58,64 +59,65 @@ class AgentRuntime:
             raise
 
     def _run_workflow(self, context: AgentContext) -> None:
-        assert context.active_plan is not None
-        tool_sequence = [
-            ("filesystem.list_directory", {"path": "."}),
-            ("filesystem.search_files", {"pattern": "*.py", "root": "."}),
-            ("planning.decompose_task", {"goal": context.objective, "context": ""}),
-            ("planning.estimate_complexity", {"goal": context.objective, "files_touched": 3, "unknowns": 2}),
-            ("planning.identify_dependencies", {"goal": context.objective, "context": ""}),
-            ("planning.prioritize_steps", {"goal": context.objective, "context": ""}),
-            ("research.package_search", {"query": "fastapi pydantic autonomous agent", "limit": 2}),
-            ("research.github_search", {"query": "agent tool registry pydantic", "limit": 2}),
-            ("research.security_advisory_lookup", {"package": "fastapi", "ecosystem": "python"}),
-            ("quality.todo_scan", {"text": context.objective}),
-            ("quality.maintainability_score", {"text": context.objective}),
-            ("planning.select_next_action", {"goal": context.objective, "context": context.compressed_summary}),
-            ("execution.environment_info", {"command": "", "cwd": ".", "timeout_seconds": 5}),
-            ("git.git_status", {"command": "", "cwd": ".", "timeout_seconds": 5}),
-            ("planning.summarize_context", {"text": context.compressed_summary}),
-            ("planning.compress_context", {"text": context.compressed_summary}),
-            ("filesystem.workspace_root", {"path": "."}),
-            ("research.dependency_lookup", {"package": "pydantic-settings", "ecosystem": "python"}),
-            ("quality.release_note", {"text": "AutoForge runtime workflow completed"}),
-            ("planning.track_progress", {"goal": context.objective, "context": context.compressed_summary}),
-            ("filesystem.search_files", {"pattern": "README.md", "root": "."}),
-        ]
-        step_index = 0
-        for index, (tool, args) in enumerate(tool_sequence):
-            if step_index < len(context.active_plan.steps):
-                step = context.active_plan.steps[step_index]
-                step.status = StepStatus.running
-                result = self.executor.execute_tool(context, tool, args)
-                step.tool_calls.append(result.call_id)
-                step.results[tool] = {"ok": result.ok, "output": result.output, "error": result.error}
-                if (index + 1) % 3 == 0:
-                    step.status = StepStatus.completed
-                    step_index += 1
-            else:
-                self.executor.execute_tool(context, tool, args)
-            if (index + 1) % 5 == 0:
-                self.executor.compress_context(context)
-                self.store.save_plan(context.task_id or "", context.active_plan)
 
-        for agent_name in ["research", "code", "testing", "review"]:
-            response = self.subagents.invoke(
-                inp=InvokeSubAgentInput(
-                    agent=agent_name,
-                    objective=context.objective,
-                    context=context.compressed_summary,
-                ),
-                parent_context=context,
+        assert context.active_plan is not None
+
+        for iteration in range(20):
+
+            action = self.agent.choose_action(
+                goal=context.objective,
+                memory=context.compressed_summary,
+                tools=self.registry.list_specs(),
             )
-            self.memory.remember(context.memory_namespace, f"subagent:{agent_name}", response.model_dump())
-            self.store.add_trace(context.task_id, "subagent_handoff", response.model_dump())
+
+            action_type = action.get("type")
+
+            if action_type == "tool":
+
+                result = self.executor.execute_tool(
+                    context,
+                    action["tool"],
+                    action.get("args", {}),
+                )
+
+                self.memory.remember(
+                    context.memory_namespace,
+                    f"tool:{action['tool']}",
+                    result.model_dump(),
+                )
+
+                self.store.add_trace(
+                    context.task_id,
+                    "tool_execution",
+                    result.model_dump(),
+                )
+
+            elif action_type == "subagent":
+
+                response = self.subagents.invoke(
+                    InvokeSubAgentInput(
+                        agent=action["agent"],
+                        objective=context.objective,
+                        context=context.compressed_summary,
+                    ),
+                    context,
+                )
+
+                self.memory.remember(
+                    context.memory_namespace,
+                    f"subagent:{action['agent']}",
+                    response.model_dump(),
+                )
+
+            elif action_type == "finish":
+
+                break
+
+            self.executor.compress_context(context)
 
         for step in context.active_plan.steps:
-            if step.status in {StepStatus.pending, StepStatus.running}:
-                step.status = StepStatus.completed
-        self.executor.compress_context(context)
-
+            step.status = StepStatus.completed
+    
     def _summary(self, context: AgentContext) -> str:
         ok = sum(1 for result in context.tool_outputs if result.ok)
         failed = len(context.tool_outputs) - ok
