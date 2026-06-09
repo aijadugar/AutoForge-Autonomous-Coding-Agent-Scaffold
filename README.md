@@ -2,7 +2,7 @@
 
 AutoForge is a production-oriented scaffold for an autonomous coding agent service. It is not a toy chatbot: the codebase has a FastAPI API, a durable runtime, dynamic tool registration, isolated subagents, a planner/executor split, SQLite persistence, structured logging, OpenTelemetry traces, metrics, retry wrappers, and an evaluation harness.
 
-## Quick Start
+## Quick Start 
 
 ```bash
 python -m venv .venv
@@ -15,9 +15,7 @@ uvicorn autoforge.api.app:app --reload
 Submit a task:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/task ^
-  -H "content-type: application/json" ^
-  -d "{\"goal\":\"inspect this repository and propose a verified change\"}"
+curl -X POST http://127.0.0.1:8000/task   -H "Content-Type: application/json"   -d '{"goal":"inspect this repository and propose a verified change"}'
 ```
 
 ## Architecture

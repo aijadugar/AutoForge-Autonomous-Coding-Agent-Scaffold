@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     """Runtime configuration loaded from env with sane local defaults."""
 
     model_config = SettingsConfigDict(env_prefix="AUTOFORGE_", env_file=".env", extra="ignore")
-
+    GEMINI_API_KEY: str
     environment: str = "local"
     database_url: str = "sqlite:///./autoforge.db"
     workspace_root: Path = Field(default_factory=lambda: Path.cwd())
